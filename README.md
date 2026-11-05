@@ -12,7 +12,7 @@
 - **Tailwind CSS** – Styling.
 - **DaisyUI** – UI components
 - **MongoDB** – Database.
-- **Better Auth** – Authentication
+- **Better Auth** – Authentication.
 - **Lucide React** – Icons.
 - **React Hot Toast** – Notifications.
 
