@@ -1,16 +1,28 @@
+
 import { parseNum } from "./format";
 
-/**
- * The API field names can vary, so every field is read through `first()`
- * with several possible keys. If your API uses different names, add them here.
- */
 const first = (o: any, keys: string[]) => {
-  for (const k of keys)
-    if (o?.[k] !== undefined && o?.[k] !== null && o?.[k] !== "") return o[k];
+  for (const k of keys) {
+    if (
+      o?.[k] !== undefined &&
+      o?.[k] !== null &&
+      o?.[k] !== ""
+    ) {
+      return o[k];
+    }
+  }
+
   return undefined;
 };
 
-export type Market = { name: string; price: number; change: number };
+export type Market = {
+  name: string;
+  min: number;
+  max: number;
+  price: number;
+  change: number;
+};
+
 export type Product = {
   id: string;
   slug: string;
@@ -29,11 +41,22 @@ export type Product = {
   markets: Market[];
   raw: any;
 };
-export type Category = { slug: string; name: string; icon: string };
+
+export type Category = {
+  slug: string;
+  name: string;
+  icon: string;
+};
 
 export const unwrap = (json: any): any[] => {
   if (Array.isArray(json)) return json;
-  const d = json?.data ?? json?.products ?? json?.categories ?? json?.items;
+
+  const d =
+    json?.data ??
+    json?.products ??
+    json?.categories ??
+    json?.items;
+
   return Array.isArray(d) ? d : [];
 };
 
@@ -47,43 +70,116 @@ const UNITS: Record<string, string> = {
   pcs: "পিস",
   pc: "পিস",
 };
+
 const normUnit = (u: any) => {
   if (!u) return "";
+
   const s = String(u).trim();
+
   if (s.startsWith("প্রতি")) return s;
+
   return `প্রতি ${UNITS[s.toLowerCase()] ?? s}`;
 };
 
-const toMarket = (m: any): Market => ({
-  name: String(
+// Market normalization
+const toMarket = (m: any): Market => {
+  const min = parseNum(
     first(m, [
-      "name",
-      "market",
-      "bazar",
-      "bazarName",
-      "marketName",
-      "location",
-      "title",
-    ]) ?? "বাজার",
-  ),
-  price: parseNum(first(m, ["price", "todayPrice", "amount", "currentPrice"])),
-  change: parseNum(first(m, ["changePercent", "change", "percentChange"])) || 0,
-});
+      "min",
+      "minPrice",
+      "min_price",
+      "lowestPrice",
+    ]),
+  );
+
+  const max = parseNum(
+    first(m, [
+      "max",
+      "maxPrice",
+      "max_price",
+      "highestPrice",
+    ]),
+  );
+
+  const actualPrice = parseNum(
+    first(m, [
+      "price",
+      "todayPrice",
+      "amount",
+      "currentPrice",
+    ]),
+  );
+
+  const price =
+    Number.isFinite(actualPrice)
+      ? actualPrice
+      : Number.isFinite(min) && Number.isFinite(max)
+        ? (min + max) / 2
+        : Number.isFinite(min)
+          ? min
+          : Number.isFinite(max)
+            ? max
+            : NaN;
+
+  return {
+    name: String(
+      first(m, [
+        "name",
+        "market",
+        "bazar",
+        "bazarName",
+        "marketName",
+        "location",
+        "title",
+      ]) ?? "বাজার",
+    ),
+
+    min,
+    max,
+    price,
+    change: 0,
+  };
+};
 
 export const normalizeProduct = (raw: any): Product => {
-  const sum = first(raw, ["priceSummary", "summary", "stats", "priceStats"]);
-  const src = { ...raw, ...(sum && typeof sum === "object" ? sum : {}) };
+  const sum = first(raw, [
+    "priceSummary",
+    "summary",
+    "stats",
+    "priceStats",
+  ]);
 
-  const catRaw = first(raw, ["category", "categorySlug", "category_slug"]);
+  const src = {
+    ...raw,
+    ...(sum && typeof sum === "object" ? sum : {}),
+  };
+
+  // Category
+  const catRaw = first(raw, [
+    "category",
+    "categorySlug",
+    "category_slug",
+  ]);
+
   const category =
     typeof catRaw === "object"
       ? String(catRaw?.slug ?? catRaw?.id ?? "")
       : String(catRaw ?? "");
+
   const categoryName =
     typeof catRaw === "object"
-      ? String(first(catRaw, ["nameBn", "name"]) ?? category)
-      : String(first(raw, ["categoryName", "categoryBn"]) ?? category);
+      ? String(
+          first(catRaw, ["nameBn", "name"]) ?? category,
+        )
+      : String(
+          first(raw, [
+            "categoryNameBn",
+            "categoryName",
+            "categoryBn",
+          ]) ?? category,
+        );
 
+  // Markets
   const mk = first(raw, [
     "markets",
     "bazars",
@@ -92,11 +188,15 @@ export const normalizeProduct = (raw: any): Product => {
     "bazarPrices",
     "market_prices",
   ]);
-  const markets: Market[] = Array.isArray(mk) ? mk.map(toMarket) : [];
-  const mp = markets.map((m) => m.price).filter(Number.isFinite);
 
+  const markets: Market[] = Array.isArray(mk)
+    ? mk.map(toMarket)
+    : [];
+
+  // Today's price
   const price = parseNum(
     first(src, [
+      "today",
       "price",
       "todayPrice",
       "currentPrice",
@@ -105,67 +205,205 @@ export const normalizeProduct = (raw: any): Product => {
       "average",
     ]),
   );
-  let change = parseNum(
-    first(raw, [
-      "changePercent",
-      "change_percent",
-      "percentChange",
-      "changePct",
-      "change",
-      "priceChange",
-    ]),
-  );
-  if (!Number.isFinite(change)) change = 0;
-  const trend = String(first(raw, ["trend", "direction"]) ?? "").toLowerCase();
-  if (change > 0 && (trend.includes("down") || trend.includes("কম")))
-    change = -change;
 
+  // Price change
+  const changeRaw = first(src, [
+    "change",
+    "changePercent",
+    "change_percent",
+    "percentChange",
+    "changePct",
+    "priceChange",
+  ]);
+
+  let change = parseNum(
+    typeof changeRaw === "object" && changeRaw !== null
+      ? first(changeRaw, ["pct", "percent", "value"])
+      : changeRaw,
+  );
+
+  if (!Number.isFinite(change)) {
+    change = 0;
+  }
+
+  const trend = String(
+    typeof changeRaw === "object" && changeRaw !== null
+      ? first(changeRaw, ["dir", "direction", "trend"])
+      : first(raw, ["trend", "direction"]),
+  ).toLowerCase();
+
+  if (trend === "down" || trend.includes("কম")) {
+    change = -Math.abs(change);
+  } else if (
+    trend === "up" ||
+    trend.includes("বৃদ্ধি")
+  ) {
+    change = Math.abs(change);
+  } else if (trend === "flat") {
+    change = 0;
+  }
+
+  // Tags
   const tagsRaw = first(raw, ["tags", "categories"]);
+
   const tags = Array.isArray(tagsRaw)
     ? tagsRaw.map((t: any) =>
-        typeof t === "object" ? String(t.nameBn ?? t.name) : String(t),
+        typeof t === "object"
+          ? String(t.nameBn ?? t.name)
+          : String(t),
       )
     : categoryName
       ? [categoryName]
       : [];
 
-  const imgOrEmoji = first(raw, ["emoji", "icon", "image", "thumbnail"]);
+  // Product image / emoji
+  const imgOrEmoji = first(raw, [
+    "image",
+    "emoji",
+    "icon",
+    "thumbnail",
+  ]);
+
+  // Product minimum price
+  const min = parseNum(
+    first(src, [
+      "minPrice",
+      "min",
+      "min_price",
+      "lowestPrice",
+    ]),
+  );
+
+  // Product maximum price
+  const max = parseNum(
+    first(src, [
+      "maxPrice",
+      "max",
+      "max_price",
+      "highestPrice",
+    ]),
+  );
+
+  // Average price
+  const avg = parseNum(
+    first(src, [
+      "avgPrice",
+      "averagePrice",
+      "avg",
+      "average",
+    ]),
+  );
+
+  // Fallback average from market prices
+  const marketPrices = markets
+    .flatMap((m) => [m.min, m.max])
+    .filter((n) => Number.isFinite(n));
+
+  const calculatedAvg =
+    marketPrices.length > 0
+      ? marketPrices.reduce((a, b) => a + b, 0) /
+        marketPrices.length
+      : NaN;
+
   return {
-    id: String(first(raw, ["id", "_id"]) ?? first(raw, ["slug"]) ?? ""),
-    slug: String(first(raw, ["slug"]) ?? first(raw, ["id", "_id"]) ?? ""),
-    name: String(
-      first(raw, ["nameBn", "name_bn", "bnName", "title", "name"]) ?? "পণ্য",
+    id: String(
+      first(raw, ["id", "_id"]) ??
+        first(raw, ["slug"]) ??
+        "",
     ),
+
+    slug: String(
+      first(raw, ["slug"]) ??
+        first(raw, ["id", "_id"]) ??
+        "",
+    ),
+
+    name: String(
+      first(raw, [
+        "nameBn",
+        "name_bn",
+        "bnName",
+        "title",
+        "name",
+      ]) ?? "পণ্য",
+    ),
+
     emoji: String(imgOrEmoji ?? "🛒"),
-    unit: normUnit(first(raw, ["unit", "unitBn"])),
+
+    unit: normUnit(
+      first(raw, ["unit", "unitBn"]),
+    ),
+
     price: Number.isFinite(price)
       ? price
-      : mp.length
-        ? mp.reduce((a, b) => a + b, 0) / mp.length
-        : NaN,
+      : Number.isFinite(avg)
+        ? avg
+        : calculatedAvg,
+
     change,
+
     category,
     categoryName,
+
     description: String(
-      first(raw, ["description", "subtitle", "details", "marketSummary"]) ?? "",
+      first(raw, [
+        "description",
+        "subtitle",
+        "details",
+        "marketSummary",
+      ]) ?? "",
     ),
+
     tags,
-    min:
-      parseNum(first(src, ["minPrice", "min", "min_price", "lowestPrice"])) ||
-      (mp.length ? Math.min(...mp) : NaN),
-    max:
-      parseNum(first(src, ["maxPrice", "max", "max_price", "highestPrice"])) ||
-      (mp.length ? Math.max(...mp) : NaN),
-    avg:
-      parseNum(first(src, ["avgPrice", "averagePrice", "avg", "average"])) ||
-      (mp.length ? mp.reduce((a, b) => a + b, 0) / mp.length : NaN),
+
+    min: Number.isFinite(min)
+      ? min
+      : markets.length
+        ? Math.min(
+            ...markets
+              .map((m) => m.min)
+              .filter(Number.isFinite),
+          )
+        : NaN,
+
+    max: Number.isFinite(max)
+      ? max
+      : markets.length
+        ? Math.max(
+            ...markets
+              .map((m) => m.max)
+              .filter(Number.isFinite),
+          )
+        : NaN,
+
+    avg: Number.isFinite(avg)
+      ? avg
+      : Number.isFinite(price)
+        ? price
+        : calculatedAvg,
+
     markets,
+
     raw,
   };
 };
 
 export const normalizeCategory = (raw: any): Category => ({
-  slug: String(first(raw, ["slug", "id", "_id", "categoryId"]) ?? ""),
-  name: String(first(raw, ["nameBn", "name_bn", "title", "name"]) ?? ""),
-  icon: String(first(raw, ["emoji", "icon"]) ?? "🛒"),
+  slug: String(
+    first(raw, ["slug", "id", "_id", "categoryId"]) ?? "",
+  ),
+
+  name: String(
+    first(raw, [
+      "nameBn",
+      "name_bn",
+      "categoryNameBn",
+      "title",
+      "name",
+    ]) ?? "",
+  ),
+
+  icon: String(
+    first(raw, ["emoji", "icon"]) ?? "🛒",
+  ),
 });
