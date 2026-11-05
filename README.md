@@ -13,7 +13,7 @@
 - **DaisyUI** – UI components
 - **MongoDB** – Database
 - **Better Auth** – Authentication
-- **Lucide React** – Icons
+- **Lucide React** – Icons.
 - **React Hot Toast** – Notifications
 
 ## ✨ Key Features
