@@ -7,7 +7,7 @@
 ## 🚀 Technologies Used
 
 - **Next.js 15** – React framework.
-- **React** – UI development
+- **React** – UI development.
 - **TypeScript** – Type-safe development
 - **Tailwind CSS** – Styling.
 - **DaisyUI** – UI components
