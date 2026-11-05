@@ -11,7 +11,7 @@
 - **TypeScript** – Type-safe development
 - **Tailwind CSS** – Styling.
 - **DaisyUI** – UI components
-- **MongoDB** – Database
+- **MongoDB** – Database.
 - **Better Auth** – Authentication
 - **Lucide React** – Icons.
 - **React Hot Toast** – Notifications
