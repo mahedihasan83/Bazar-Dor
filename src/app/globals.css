@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: false;
+}
+@plugin "daisyui/theme" {
+  name: "bazar";
+  default: true;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #eef6f0;
+  --color-base-300: #d5e5d9;
+  --color-base-content: #17291d;
+  --color-primary: #15803d;
+  --color-primary-content: #ffffff;
+  --color-secondary: #166534;
+  --color-secondary-content: #ffffff;
+  --color-accent: #84cc16;
+  --color-accent-content: #1a2e05;
+  --color-neutral: #1f3a29;
+  --color-neutral-content: #ffffff;
+  --color-info: #0284c7;
+  --color-info-content: #ffffff;
+  --color-success: #16a34a;
+  --color-success-content: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-content: #ffffff;
+  --color-error: #dc2626;
+  --color-error-content: #ffffff;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 0.5rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+body {
+  font-family: var(--font-hind), system-ui, sans-serif;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 45s linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
